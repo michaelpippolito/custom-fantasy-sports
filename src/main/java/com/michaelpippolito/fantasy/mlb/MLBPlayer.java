@@ -9,11 +9,14 @@ import lombok.Setter;
 public class MLBPlayer {
     private final String name;
     @Setter
-    private String url;
+    private String overviewUrl;
+    @Setter
+    private String splitsUrl;
     @Setter
     private double totalWAR;
     private final MLBTeam team;
     private final MLBPositionGroup positionGroup;
+    @Setter
     private int plateAppearances;
     @Setter
     private double inningsPitched;
