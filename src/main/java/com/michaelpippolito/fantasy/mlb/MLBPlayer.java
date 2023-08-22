@@ -20,9 +20,7 @@ public class MLBPlayer {
     private int plateAppearances;
     @Setter
     private double inningsPitched;
-    @Setter
     private double totalInningsPitched;
-    @Setter
     private int totalPlateAppearances;
 
     @Override
@@ -69,6 +67,22 @@ public class MLBPlayer {
                 return (((double) plateAppearances) / totalPlateAppearances) * totalWAR;
             default:
                 return totalWAR;
+        }
+    }
+
+    public void setTotalInningsPitched(double totalInningsPitched) {
+        this.totalInningsPitched = totalInningsPitched;
+        if (inningsPitched > totalInningsPitched) {
+            //TODO Remove this hacky fix to handle players who are traded mid-season
+            this.inningsPitched = totalInningsPitched;
+        }
+    }
+
+    public void setTotalPlateAppearances(int totalPlateAppearances) {
+        this.totalPlateAppearances = totalPlateAppearances;
+        if (totalPlateAppearances > totalPlateAppearances) {
+            //TODO Remove this hacky fix to handle players who are traded mid-season
+            this.plateAppearances = totalPlateAppearances;
         }
     }
 }

@@ -3,7 +3,6 @@ package com.michaelpippolito.fantasy.results;
 import com.michaelpippolito.fantasy.FantasyPlayer;
 import com.michaelpippolito.fantasy.mlb.MLBPlayer;
 import com.michaelpippolito.fantasy.mlb.MLBPositionGroup;
-import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;

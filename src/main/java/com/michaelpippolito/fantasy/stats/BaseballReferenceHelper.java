@@ -16,13 +16,13 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class BaseballReferenceHelper {
     private static final String BASEBALL_REFERENCE_BASE_URL = "https://www.baseball-reference.com";
     private static final String BASEBALL_REFERENCE_OVERVIEW_PAGE = "/players/%s/%s.shtml";
-    private static final String BASEBALL_REFERENCE_SPLITS_PAGE = "/players/split.fcgi?id=%s&year=%d&t=b";
+    private static final String BASEBALL_REFERENCE_SPLITS_PAGE = "/players/split.fcgi?id=%s&year=%d&t=%s";
 
     @SneakyThrows
     private static Document getHtmlDocument(String url) {
@@ -53,29 +53,51 @@ public class BaseballReferenceHelper {
         return Jsoup.connect(url).get();
     }
 
-    public static Collection<MLBPlayer> getTeamStats(MLBTeam team, MLBPositionGroup positionGroup, int year) {
+    public static Collection<MLBPlayer> getTeamStats(MLBTeam team, MLBPositionGroup positionGroup, int year, Map<MLBTeam, List<Document>> gameDocumentsCache) {
         Map<String, MLBPlayer> players = new LinkedHashMap<>();
 
         String teamUrl = BASEBALL_REFERENCE_BASE_URL + "/teams/" + team.getAbbreviation() + "/" + year + ".shtml";
-        Document teamDocument = getHtmlDocument(teamUrl);
-        List<String> gameUrls = getAllGameUrls(teamDocument);
 
-        for (int i = 0; i < gameUrls.size(); i++) {
+        Document teamDocument;
+        List<String> gameUrls = new ArrayList<>();
+        int size;
+        boolean teamCached = false;
 
-            String gameUrl = gameUrls.get(i);
+        if (!gameDocumentsCache.containsKey(team)) {
+            gameDocumentsCache.put(team, new LinkedList<Document>());
+            teamDocument = getHtmlDocument(teamUrl);
+            gameUrls = getAllGameUrls(teamDocument);
+            size = gameUrls.size();
+        } else {
+            size = gameDocumentsCache.get(team).size();
+            teamCached = true;
+        }
 
-            Document gameDocument = BaseballReferenceHelper.getHtmlDocument(gameUrl);
-            System.out.print("\tDownloading data from game " + (i + 1) + "/" + gameUrls.size() + " - " + getGameInfo(gameDocument) + "...");
+        for (int i = 0; i < size; i++) {
+
+            String gameUrl;
+
+            Document gameDocument;
+            if (teamCached) {
+                gameDocument = gameDocumentsCache.get(team).get(i);
+                System.out.print("\tRetrieving cached data from game " + (i + 1) + "/" + size + " - " + getGameInfo(gameDocument) + "...");
+            } else {
+                gameUrl = gameUrls.get(i);
+                gameDocument = BaseballReferenceHelper.getHtmlDocument(gameUrl);
+                gameDocumentsCache.get(team).add(gameDocument);
+                System.out.print("\tDownloading data from game " + (i + 1) + "/" + size + " - " + getGameInfo(gameDocument) + "...");
+            }
+
             switch (positionGroup) {
                 case ROTATION:
-                    MLBPlayer startingPitcher = getStartingPitcher(team, gameDocument);
+                    MLBPlayer startingPitcher = getStartingPitcher(team, gameDocument, year);
 
-                    if (players.containsKey(startingPitcher.getName())) {
-                        players.get(startingPitcher.getName()).updateInningsPitched(startingPitcher.getInningsPitched());
-                    } else {
-                        Document playerDocument = getHtmlDocument(startingPitcher.getOverviewUrl());
-                        startingPitcher.setTotalWAR(getTotalWAR(playerDocument, positionGroup, team, year));
-                        startingPitcher.setTotalInningsPitched(getTotalInningsPitched(playerDocument, team, year));
+                    if (!players.containsKey(startingPitcher.getName())) {
+                        Document startingPitcherOverviewDocument = getHtmlDocument(startingPitcher.getOverviewUrl());
+                        Document startingPitcherSplitsDocument = getHtmlDocument(startingPitcher.getSplitsUrl());
+                        setInningsPitched(startingPitcher, startingPitcherSplitsDocument, MLBPositionGroup.ROTATION);
+                        startingPitcher.setTotalInningsPitched(getTotalInningsPitched(startingPitcherOverviewDocument, team, year));
+                        startingPitcher.setTotalWAR(getTotalWAR(startingPitcherOverviewDocument, MLBPositionGroup.ROTATION, team, year));
                         players.put(startingPitcher.getName(), startingPitcher);
                     }
                     break;
@@ -106,15 +128,15 @@ public class BaseballReferenceHelper {
                     }
                     break;
                 case BULLPEN:
-                    Set<MLBPlayer> reliefPitchers = getReliefPitchers(team, gameDocument);
+                    Set<MLBPlayer> reliefPitchers = getReliefPitchers(team, gameDocument, year);
 
                     for (MLBPlayer reliefPitcher : reliefPitchers) {
-                        if (players.containsKey(reliefPitcher.getName())) {
-                            players.get(reliefPitcher.getName()).updateInningsPitched(reliefPitcher.getInningsPitched());
-                        } else {
-                            Document playerDocument = getHtmlDocument(reliefPitcher.getOverviewUrl());
-                            reliefPitcher.setTotalWAR(getTotalWAR(playerDocument, positionGroup, team, year));
-                            reliefPitcher.setTotalInningsPitched(getTotalInningsPitched(playerDocument, team, year));
+                        if (!players.containsKey(reliefPitcher.getName())) {
+                            Document reliefPitcherOverviewDocument = getHtmlDocument(reliefPitcher.getOverviewUrl());
+                            Document reliefPitcherSplitsDocument = getHtmlDocument(reliefPitcher.getSplitsUrl());
+                            setInningsPitched(reliefPitcher, reliefPitcherSplitsDocument, MLBPositionGroup.BULLPEN);
+                            reliefPitcher.setTotalInningsPitched(getTotalInningsPitched(reliefPitcherOverviewDocument, team, year));
+                            reliefPitcher.setTotalWAR(getTotalWAR(reliefPitcherOverviewDocument, MLBPositionGroup.BULLPEN, team, year));
                             players.put(reliefPitcher.getName(), reliefPitcher);
                         }
                     }
@@ -127,48 +149,90 @@ public class BaseballReferenceHelper {
     }
 
     private static void setPlateAppearances(MLBPlayer player, Document positionPlayerDocument, MLBPositionGroup positionGroup) {
-        Node defensiveSplitsComment = positionPlayerDocument.select("div[id~=all_defp]").stream().filter(element ->
+        Element defensiveSplitsElement = positionPlayerDocument.select("div[id~=all_defp]").stream().filter(element ->
                 element.childNodes().stream().anyMatch(node ->
                         node instanceof Element && ((Element) node).select(
                                 "span[data-label=\"Defensive Positions\"]"
                         ).size() > 0
                 )
-        ).findFirst().orElse(null).childNodes().stream().filter(node -> node instanceof Comment).findFirst().orElse(null);
+        ).findFirst().orElse(null);
 
-        Document defensiveTableDocument = Jsoup.parse(removeHtmlComments(defensiveSplitsComment.toString()));
+        if (defensiveSplitsElement != null) {
+            Node defensiveSplitsComment = defensiveSplitsElement.childNodes().stream().filter(node -> node instanceof Comment).findFirst().orElse(null);
+
+            Document defensiveTableDocument = Jsoup.parse(removeHtmlComments(defensiveSplitsComment.toString()));
 
 
-        Element defensivePositionsTable = defensiveTableDocument.getElementById("defp");
-        Element defensivePositionsTableBody = defensivePositionsTable.getElementsByTag("tbody").first();
+            Element defensivePositionsTable = defensiveTableDocument.getElementById("defp");
+            Element defensivePositionsTableBody = defensivePositionsTable.getElementsByTag("tbody").first();
 
-        int totalPlateAppearances = 0;
-        player.setPlateAppearances(0);
-        for (Element defensivePositionsRow : defensivePositionsTableBody.getElementsByTag("tr")) {
-            BaseballReferencePosition position = BaseballReferencePosition.fromString(getPositionString(defensivePositionsRow));
-            Node plateAppearancesNode =  defensivePositionsRow.select("td[data-stat=\"PA\"]").first().firstChild();
-            if (plateAppearancesNode != null) {
-                int plateAppearances = Integer.parseInt(plateAppearancesNode.toString());
-                totalPlateAppearances += plateAppearances;
+            int totalPlateAppearances = 0;
+            player.setPlateAppearances(0);
+            for (Element defensivePositionsRow : defensivePositionsTableBody.getElementsByTag("tr")) {
+                BaseballReferencePosition position = BaseballReferencePosition.fromString(getPositionString(defensivePositionsRow));
+                Node plateAppearancesNode = defensivePositionsRow.select("td[data-stat=\"PA\"]").first().firstChild();
+                if (plateAppearancesNode != null) {
+                    int plateAppearances = Integer.parseInt(plateAppearancesNode.toString());
+                    totalPlateAppearances += plateAppearances;
+
+                    switch (positionGroup) {
+                        case INFIELD:
+                            if (position.isInfield()) {
+                                player.updatePlateAppearances(plateAppearances);
+                            }
+                            break;
+                        case OUTFIELD_DH:
+                            if (position.isOutfield()) {
+                                player.updatePlateAppearances(plateAppearances);
+                            }
+                            break;
+                    }
+                }
+            }
+            player.setTotalPlateAppearances(totalPlateAppearances);
+        } else {
+            player.setPlateAppearances(0);
+            player.setTotalPlateAppearances(0);
+        }
+    }
+
+    private static void setInningsPitched(MLBPlayer player, Document pitcherDocument, MLBPositionGroup positionGroup) {
+        Node pitchingRoleComment = pitcherDocument.select("span[data-label=Pitching Role]").first().parent().parent().childNodes().stream().filter(node -> node instanceof Comment).findFirst().orElse(null);
+        Document pitchingRoleDocument = Jsoup.parse(removeHtmlComments(pitchingRoleComment.toString()));
+
+        Element pitchingRoleTable = pitchingRoleDocument.select("div[id=\"all_sprel_extra\"]").first();
+        Element pitchingRoleTableBody = pitchingRoleTable.getElementsByTag("tbody").first();
+
+        player.setInningsPitched(0);
+        for (Element pitchingPositionRow : pitchingRoleTableBody.getElementsByTag("tr")) {
+            BaseballReferencePosition position = BaseballReferencePosition.fromString(getPositionString(pitchingPositionRow));
+            Node inningsPitchedNode = pitchingPositionRow.select("td[data-stat=\"IP\"]").first().firstChild();
+            if (inningsPitchedNode != null) {
+                double inningsPitched = Double.parseDouble(inningsPitchedNode.toString());
 
                 switch (positionGroup) {
-                    case INFIELD:
-                        if (position.isInfield()) {
-                            player.updatePlateAppearances(plateAppearances);
+                    case ROTATION:
+                        if (BaseballReferencePosition.STARTER.equals(position)) {
+                            player.updateInningsPitched(inningsPitched);
                         }
                         break;
-                    case OUTFIELD_DH:
-                        if (position.isOutfield()) {
-                            player.updatePlateAppearances(plateAppearances);
+                    case BULLPEN:
+                        if (BaseballReferencePosition.RELIEVER.equals(position)) {
+                            player.updateInningsPitched(inningsPitched);
                         }
                         break;
                 }
             }
         }
-        player.setTotalPlateAppearances(totalPlateAppearances);
     }
 
     private static String getPositionString(Element defensivePositionsRow) {
-        String positionString = defensivePositionsRow.select("th[data-stat=\"split_name\"]").first().firstChild().toString().substring(3);
+        String positionString = defensivePositionsRow.select("th[data-stat=\"split_name\"]").first().firstChild().toString();
+        if (positionString.equals(BaseballReferencePosition.OTHER.getWebValue())) {
+            return positionString;
+        } else {
+            positionString = positionString.substring(3);
+        }
 
         if (positionString.matches("^(?:[A-Z]{1,2}|[1-3][A-Z]) for (?:[A-Z]{1,2}|[1-3][A-Z])$")) {
             return positionString.substring(0, positionString.indexOf("for")).trim();
@@ -193,10 +257,10 @@ public class BaseballReferenceHelper {
             case ROTATION:
             case BULLPEN:
                 players = teamDocument.getElementById("team_pitching").getElementsByTag("a").stream()
-                    .collect(Collectors.toMap(
-                            element -> element.firstChild().toString(),
-                            element -> element.attr("href")
-                    ));
+                        .collect(Collectors.toMap(
+                                element -> element.firstChild().toString(),
+                                element -> element.attr("href")
+                        ));
                 break;
             case INFIELD:
             case OUTFIELD_DH:
@@ -245,18 +309,17 @@ public class BaseballReferenceHelper {
         return gameUrls;
     }
 
-    private static MLBPlayer getStartingPitcher(MLBTeam team, Document gameDocument) {
+    private static MLBPlayer getStartingPitcher(MLBTeam team, Document gameDocument, int year) {
         Element pitchingTableElement = getPitchingTableElement(team, gameDocument);
         Element startingPitcherElement = pitchingTableElement.select("th[csk=\"0\"]").first().parent();
-
-        String pitcherName = getPitcherName(startingPitcherElement);
+        String playerId = getPlayerId(startingPitcherElement);
 
         return MLBPlayer.builder()
-                .name(pitcherName)
+                .name(getPitcherName(startingPitcherElement))
                 .team(team)
                 .positionGroup(MLBPositionGroup.ROTATION)
-                .inningsPitched(getInningsPitched(startingPitcherElement))
-                .overviewUrl(getPitcherUrl(startingPitcherElement))
+                .overviewUrl(BASEBALL_REFERENCE_BASE_URL + String.format(BASEBALL_REFERENCE_OVERVIEW_PAGE, playerId.charAt(0), playerId))
+                .splitsUrl(BASEBALL_REFERENCE_BASE_URL + String.format(BASEBALL_REFERENCE_SPLITS_PAGE, playerId, year, "p"))
                 .build();
     }
 
@@ -281,23 +344,15 @@ public class BaseballReferenceHelper {
         return pitcherElement.select("th").first().firstElementChild().firstChild().toString();
     }
 
-    private static Double getInningsPitched(Element pitcherElement) {
-        return Double.parseDouble(pitcherElement.select("td[data-stat=\"IP\"]").first().firstChild().toString());
-    }
-
-    private static String getPitcherUrl(Element pitcherElement) {
-        return BASEBALL_REFERENCE_BASE_URL + pitcherElement.select("th").first().firstElementChild().attributes().get("href");
-    }
-
-    private static String getPlayerId(Element positionPlayerElement) {
-        Element identifierElement = positionPlayerElement.select("th").first();
+    private static String getPlayerId(Element playerElement) {
+        Element identifierElement = playerElement.select("th").first();
         String playerHref;
         if (identifierElement.firstChild().toString().trim().contains("&nbsp;")) {
             playerHref = identifierElement.childNode(1).attributes().get("href");
         } else {
-            playerHref = positionPlayerElement.select("th").first().childNode(0).attributes().get("href");
+            playerHref = playerElement.select("th").first().childNode(0).attributes().get("href");
         }
-        return playerHref.substring(playerHref.lastIndexOf("/")+1, playerHref.lastIndexOf("."));
+        return playerHref.substring(playerHref.lastIndexOf("/") + 1, playerHref.lastIndexOf("."));
     }
 
     private static double getTotalWAR(Document playerDocument, MLBPositionGroup positionGroup, MLBTeam team, int year) {
@@ -404,7 +459,7 @@ public class BaseballReferenceHelper {
                         .team(team)
                         .positionGroup(MLBPositionGroup.INFIELD)
                         .overviewUrl(BASEBALL_REFERENCE_BASE_URL + String.format(BASEBALL_REFERENCE_OVERVIEW_PAGE, playerId.charAt(0), playerId))
-                        .splitsUrl(BASEBALL_REFERENCE_BASE_URL + String.format(BASEBALL_REFERENCE_SPLITS_PAGE, playerId, year))
+                        .splitsUrl(BASEBALL_REFERENCE_BASE_URL + String.format(BASEBALL_REFERENCE_SPLITS_PAGE, playerId, year, "b"))
                         .build();
                 infielders.add(infielder);
             }
@@ -429,7 +484,7 @@ public class BaseballReferenceHelper {
                         .team(team)
                         .positionGroup(MLBPositionGroup.OUTFIELD_DH)
                         .overviewUrl(BASEBALL_REFERENCE_BASE_URL + String.format(BASEBALL_REFERENCE_OVERVIEW_PAGE, playerId.charAt(0), playerId))
-                        .splitsUrl(BASEBALL_REFERENCE_BASE_URL + String.format(BASEBALL_REFERENCE_SPLITS_PAGE, playerId, year))
+                        .splitsUrl(BASEBALL_REFERENCE_BASE_URL + String.format(BASEBALL_REFERENCE_SPLITS_PAGE, playerId, year, "b"))
                         .build();
                 outfielders.add(outfielder);
             }
@@ -439,19 +494,21 @@ public class BaseballReferenceHelper {
         return outfielders;
     }
 
-    private static Set<MLBPlayer> getReliefPitchers(MLBTeam team, Document gameDocument) {
+    private static Set<MLBPlayer> getReliefPitchers(MLBTeam team, Document gameDocument, int year) {
         Set<MLBPlayer> reliefPitchers = new LinkedHashSet<>();
 
         Element pitchingTableElement = getPitchingTableElement(team, gameDocument);
         List<Element> reliefPitcherElements = pitchingTableElement.select("th[csk~=[1-9]+]").stream().map(Element::parent).collect(Collectors.toList());
 
         for (Element reliefPitcherElement : reliefPitcherElements) {
+            String playerId = getPlayerId(reliefPitcherElement);
+
             MLBPlayer reliefPitcher = MLBPlayer.builder()
                     .name(getPitcherName(reliefPitcherElement))
                     .team(team)
                     .positionGroup(MLBPositionGroup.BULLPEN)
-                    .inningsPitched(getInningsPitched(reliefPitcherElement))
-                    .overviewUrl(getPitcherUrl(reliefPitcherElement))
+                    .overviewUrl(BASEBALL_REFERENCE_BASE_URL + String.format(BASEBALL_REFERENCE_OVERVIEW_PAGE, playerId.charAt(0), playerId))
+                    .splitsUrl(BASEBALL_REFERENCE_BASE_URL + String.format(BASEBALL_REFERENCE_SPLITS_PAGE, playerId, year, "p"))
                     .build();
             reliefPitchers.add(reliefPitcher);
         }

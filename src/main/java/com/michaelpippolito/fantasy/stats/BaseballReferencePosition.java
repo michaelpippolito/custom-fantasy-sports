@@ -16,7 +16,10 @@ public enum BaseballReferencePosition {
     DESIGNATED_HITTER("DH"),
     PINCH_HITTER("PH"),
     PINCH_RUNNER("PR"),
-    PITCHER("P");
+    PITCHER("P"),
+    STARTER("Starter"),
+    RELIEVER("Reliever"),
+    OTHER("Other");
 
     @Getter
     private final String webValue;
