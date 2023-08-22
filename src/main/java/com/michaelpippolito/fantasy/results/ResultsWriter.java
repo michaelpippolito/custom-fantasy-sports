@@ -60,9 +60,9 @@ public class ResultsWriter {
             statHeader.createCell(16).setCellValue(MLBPositionGroup.OUTFIELD_DH.getValue() + " WAR");
             statHeader.createCell(18).setCellValue("Name");
             statHeader.createCell(19).setCellValue("Total IP");
-            statHeader.createCell(20).setCellValue(MLBPositionGroup.BULLPEN + " IP");
+            statHeader.createCell(20).setCellValue(MLBPositionGroup.BULLPEN.getValue() + " IP");
             statHeader.createCell(21).setCellValue("Total WAR");
-            statHeader.createCell(22).setCellValue(MLBPositionGroup.BULLPEN + " WAR");
+            statHeader.createCell(22).setCellValue(MLBPositionGroup.BULLPEN.getValue() + " WAR");
             statHeader.createCell(24).setCellValue("Name");
             statHeader.createCell(25).setCellValue("WAR");
 
