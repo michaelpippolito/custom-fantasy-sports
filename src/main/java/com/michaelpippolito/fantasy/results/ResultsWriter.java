@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 public class ResultsWriter {
     static final DecimalFormat decimalFormat = new DecimalFormat("#.00");
 
-    public static void writeResults(Map<FantasyPlayer, Collection<MLBPlayer>> results) {
+    public static void writeResults(Map<FantasyPlayer, Collection<MLBPlayer>> results, String resultsFileName) {
         Workbook resultsWorkbook = new XSSFWorkbook();
 
         Sheet generalStandingsSheet = resultsWorkbook.createSheet("General_Standings");
@@ -163,7 +163,7 @@ public class ResultsWriter {
             playerGeneralStandingsRow.createCell(6).setCellValue(totalRotationWAR + totalInfieldWAR + totalOutfieldWAR + totalBullpenWAR + fantasyPlayer.getWildcardPick().getTotalWAR());
         }
 
-        try (FileOutputStream outputStream = new FileOutputStream("results.xlsx")) {
+        try (FileOutputStream outputStream = new FileOutputStream(resultsFileName)) {
             resultsWorkbook.write(outputStream);
             System.out.println("Workbook saved successfully.");
         } catch (IOException e) {

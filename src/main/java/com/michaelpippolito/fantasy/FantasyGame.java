@@ -13,6 +13,7 @@ import java.util.*;
 public class FantasyGame {
     private final List<FantasyPlayer> players;
     private final int year;
+    private final String resultsFileName;
 
     public void play() {
 
@@ -32,13 +33,15 @@ public class FantasyGame {
                 System.out.println("\t\t" + draftedPlayers.size() + " players in the " + draftPick.getTeam().getName() + " " + draftPick.getPosition().getValue());
             }
 
-            System.out.println("\t" + player.getName() + " has drafted " + player.getWildcardPick().getName() + " as a Wildcard");
-            BaseballReferenceHelper.populatePlayerStats(player.getWildcardPick(), year);
+            if (player.getWildcardPick() != null) {
+                System.out.println("\t" + player.getName() + " has drafted " + player.getWildcardPick().getName() + " as a Wildcard");
+                BaseballReferenceHelper.populatePlayerStats(player.getWildcardPick(), year);
+            }
 
             results.put(player, draftedPlayersResults);
         }
 
-        ResultsWriter.writeResults(results);
+        ResultsWriter.writeResults(results, resultsFileName);
 
     }
 }
