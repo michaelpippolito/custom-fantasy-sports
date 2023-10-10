@@ -16,7 +16,7 @@ public enum MLBTeam {
     CLE("Cleveland Guardians", "CLE"),
     COL("Colorado Rockies", "COL"),
     DET("Detroit Tigers", "DET"),
-    FLA("Miami Marlins", "FLA"),
+//    FLA("Miami Marlins", "FLA"),
     HOU("Houston Astros", "HOU"),
     KAN("Kansas City Royals", "KAN"),
     LAA("Los Angeles Angels", "LAA"),
