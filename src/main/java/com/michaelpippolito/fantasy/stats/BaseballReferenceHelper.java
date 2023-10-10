@@ -43,7 +43,13 @@ public class BaseballReferenceHelper {
             System.out.println("Socket time out!");
             HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
             Map<String, java.util.List<String>> headers = connection.getHeaderFields();
-            int retryAfter = Integer.parseInt(headers.get("Retry-After").get(0));
+            int retryAfter;
+            if (headers.containsKey("Retry-After")) {
+                retryAfter = Integer.parseInt(headers.get("Retry-After").get(0));
+            } else {
+                retryAfter = 10;
+            }
+
             return getHtmlDocument(url, retryAfter * 1000);
         }
     }
