@@ -39,7 +39,7 @@ public enum BaseballReferencePosition {
                 default -> false;
             };
             case OUTFIELD_DH -> switch (this) {
-                case RIGHT_FIELD, LEFT_FIELD, CENTER_FIELD, DESIGNATED_HITTER, PINCH_HITTER -> true;
+                case RIGHT_FIELD, LEFT_FIELD, CENTER_FIELD, DESIGNATED_HITTER, PINCH_HITTER, PITCHER -> true;
                 default -> false;
             };
         };
