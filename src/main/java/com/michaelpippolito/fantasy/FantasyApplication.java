@@ -1,27 +1,20 @@
 package com.michaelpippolito.fantasy;
 
-import com.michaelpippolito.fantasy.mlb.MLBPositionGroup;
-import com.michaelpippolito.fantasy.mlb.MLBTeam;
+import com.michaelpippolito.fantasy.mlb.repository.MlbGameRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.retry.annotation.EnableRetry;
 
-import java.util.ArrayList;
-import java.util.List;
-
+@SpringBootApplication
+@EnableJpaRepositories(basePackages = "com.michaelpippolito.fantasy.mlb.repository")
+@EnableRetry
 public class FantasyApplication {
-    public static void main(String[] args) {
-        List<FantasyPlayer> players = new ArrayList<>();
-        for (MLBTeam team : MLBTeam.values()) {
-            players.add(FantasyPlayer.builder()
-                    .name(team.getName())
-                    .draftPicks(List.of(
-                            new FantasyDraftPick(team, MLBPositionGroup.ROTATION),
-                            new FantasyDraftPick(team, MLBPositionGroup.INFIELD),
-                            new FantasyDraftPick(team, MLBPositionGroup.OUTFIELD_DH),
-                            new FantasyDraftPick(team, MLBPositionGroup.BULLPEN)
-                    ))
-                    .build());
-        }
+    @Autowired
+    private MlbGameRepository mlbGameRepository;
 
-        FantasyGame game = new FantasyGame(players, 2023, "all_team_results.xlsx");
-        game.play();
+    public static void main(String[] args) {
+        SpringApplication.run(FantasyApplication.class, args);
     }
 }

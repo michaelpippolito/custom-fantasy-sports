@@ -1,4 +1,4 @@
-package com.michaelpippolito.fantasy.stats;
+package com.michaelpippolito.fantasy.mlb.def;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -23,6 +23,27 @@ public enum BaseballReferencePosition {
 
     @Getter
     private final String webValue;
+
+    public boolean isPositionGroup(MlbPositionGroup positionGroup) {
+        return switch (positionGroup) {
+            case ROTATION -> switch (this) {
+                case STARTER -> true;
+                default -> false;
+            };
+            case BULLPEN -> switch (this) {
+                case PITCHER, RELIEVER -> true;
+                default -> false;
+            };
+            case INFIELD -> switch (this) {
+                case CATCHER, FIRST_BASE, SECOND_BASE, SHORT_STOP, THIRD_BASE -> true;
+                default -> false;
+            };
+            case OUTFIELD_DH -> switch (this) {
+                case RIGHT_FIELD, LEFT_FIELD, CENTER_FIELD, DESIGNATED_HITTER, PINCH_HITTER -> true;
+                default -> false;
+            };
+        };
+    }
 
     public boolean isInfield() {
         switch (this) {
@@ -68,3 +89,4 @@ public enum BaseballReferencePosition {
         return null;
     }
 }
+

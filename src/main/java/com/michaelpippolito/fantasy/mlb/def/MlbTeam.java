@@ -1,11 +1,15 @@
-package com.michaelpippolito.fantasy.mlb;
+package com.michaelpippolito.fantasy.mlb.def;
 
+import jakarta.persistence.AttributeConverter;
+import jakarta.persistence.Converter;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+import java.util.Arrays;
+
 @AllArgsConstructor
 @Getter
-public enum MLBTeam {
+public enum MlbTeam {
     ARI("Arizona Diamondbacks", "ARI"),
     ATL("Atlanta Braves", "ATL"),
     BAL("Baltimore Orioles", "BAL"),
@@ -16,9 +20,8 @@ public enum MLBTeam {
     CLE("Cleveland Guardians", "CLE"),
     COL("Colorado Rockies", "COL"),
     DET("Detroit Tigers", "DET"),
-//    FLA("Miami Marlins", "FLA"),
     HOU("Houston Astros", "HOU"),
-    KAN("Kansas City Royals", "KAN"),
+    KCR("Kansas City Royals", "KCR"),
     LAA("Los Angeles Angels", "LAA"),
     LAD("Los Angeles Dodgers", "LAD"),
     MIA("Miami Marlins", "MIA"),
@@ -40,4 +43,21 @@ public enum MLBTeam {
 
     private final String name;
     private final String abbreviation;
+
+    public static MlbTeam fromName(String name) {
+        return Arrays.stream(MlbTeam.values()).filter(it -> it.getName().equals(name)).findFirst().orElse(null);
+    }
+
+    @Converter
+    public static class MlbTeamConverter implements AttributeConverter<MlbTeam, String> {
+        @Override
+        public String convertToDatabaseColumn(MlbTeam mlbTeam) {
+            return mlbTeam.getName();
+        }
+
+        @Override
+        public MlbTeam convertToEntityAttribute(String databaseColumn) {
+            return MlbTeam.fromName(databaseColumn);
+        }
+    }
 }
