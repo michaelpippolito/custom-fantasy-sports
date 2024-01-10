@@ -10,6 +10,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFTable;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -121,7 +122,20 @@ public class MlbFantasyController {
 
             playerDetailSheet.getRow(2).createCell(12).setCellValue(player.getWildcard());
             playerDetailSheet.getRow(2).createCell(13).setCellValue(wildcardWar);
+
+            playerDetailSheet.autoSizeColumn(0);
+            playerDetailSheet.autoSizeColumn(3);
+            playerDetailSheet.autoSizeColumn(6);
+            playerDetailSheet.autoSizeColumn(9);
+            playerDetailSheet.autoSizeColumn(12);
         }
+
+        generalStandingsSheet.autoSizeColumn(0);
+        generalStandingsSheet.autoSizeColumn(1);
+        generalStandingsSheet.autoSizeColumn(2);
+        generalStandingsSheet.autoSizeColumn(3);
+        generalStandingsSheet.autoSizeColumn(4);
+        generalStandingsSheet.autoSizeColumn(5);
 
         response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=results" + Instant.now().toEpochMilli() + ".xlsx");
